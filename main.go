@@ -38,7 +38,7 @@ func (r Result) String() string {
 		r.err == nil, r.err, r.start.Format(TimeFormat), r.end.Format(TimeFormat))
 }
 
-func runThrottleTest(name string, n int, f func() Result) []Result {
+func runThrottleTest(name string, n int, f func() error) []Result {
 	log.Printf("starting throttle test, name=%s, n=%d", name, n)
 	var wg sync.WaitGroup
 	var outLock sync.Mutex
@@ -47,7 +47,14 @@ func runThrottleTest(name string, n int, f func() Result) []Result {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			res := f()
+			start := time.Now()
+			err := f()
+			end := time.Now()
+			res := Result{
+				start: start,
+				end:   end,
+				err:   err,
+			}
 			outLock.Lock()
 			out = append(out, res)
 			outLock.Unlock()
@@ -72,16 +79,9 @@ func NewLattice() *Lattice {
 	return &Lattice{c: client}
 }
 
-func (l *Lattice) listSn() Result {
-	start := time.Now()
+func (l *Lattice) listSn() error {
 	_, err := l.c.ListServiceNetworks(&ListServiceNetworksInput{})
-	end := time.Now()
-	res := Result{start: start, end: end}
-	if err != nil {
-		res.err = err
-		return res
-	}
-	return res
+	return err
 }
 
 func printResults(res []Result) {
