@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	. "github.com/aws/aws-sdk-go/service/vpclattice"
 )
@@ -102,10 +103,19 @@ func printResults(res []Result) {
 func printResultsSummary(res []Result) {
 	total := len(res)
 	success := 0
+	errors := map[string]int{}
 	for _, r := range res {
 		if r.err == nil {
 			success += 1
+		} else {
+			code := "unknown"
+			if aerr, ok := r.err.(awserr.Error); ok {
+				code = aerr.Code()
+			}
+			errCnt := errors[code]
+			errCnt += 1
+			errors[code] = errCnt
 		}
 	}
-	log.Printf("results summary, total=%d, success=%d", total, success)
+	log.Printf("results summary, total=%d, success=%d, errors=%v", total, success, errors)
 }
