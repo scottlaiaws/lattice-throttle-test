@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -16,13 +17,16 @@ import (
 func main() {
 	lattice := NewLattice()
 
-	waitNextSecond()
-	results := runThrottleTest("list sn", 1000, lattice.listSn)
-	printResultsSummary(results)
+	// waitNextSecond()
+	// results := runThrottleTest("list sn", 1000, lattice.listSn)
+	// printResultsSummary(results)
 
 	// waitNextSecond()
 	// results := runThrottleTest("list svcs", 1000, lattice.listSvc)
 	// printResultsSummary(results)
+
+	waitNextSecond()
+	runThrottleTest("create sn", 20, lattice.createSn)
 }
 
 // waits till beginning of next second
@@ -68,7 +72,7 @@ func runThrottleTest(name string, concurrency int, f func() error) []Result {
 		}()
 	}
 	wg.Wait()
-	log.Printf("finished throttle test, name=%s, n=%d", name, concurrency)
+	printResultsSummary(results)
 	return results
 }
 
@@ -94,6 +98,15 @@ func (l *Lattice) listSn() error {
 
 func (l *Lattice) listSvc() error {
 	_, err := l.c.ListServices(&ListServicesInput{})
+	return err
+}
+
+func (l *Lattice) createSn() error {
+	id := rand.Int()
+	snName := fmt.Sprintf("%d-throttle-test", id)
+	_, err := l.c.CreateServiceNetwork(&CreateServiceNetworkInput{
+		Name: &snName,
+	})
 	return err
 }
 
