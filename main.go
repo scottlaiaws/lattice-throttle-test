@@ -8,18 +8,21 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	. "github.com/aws/aws-sdk-go/service/vpclattice"
 )
 
 func main() {
 	lattice := NewLattice()
+
 	waitNextSecond()
-	//	runThrottleTest("list sn", 100, lattice.listSn)
-	// printResults(res)
-	waitNextSecond()
-	results := runThrottleTest("list svcs", 1000, lattice.listSvc)
+	results := runThrottleTest("list sn", 1000, lattice.listSn)
 	printResultsSummary(results)
+
+	// waitNextSecond()
+	// results := runThrottleTest("list svcs", 1000, lattice.listSvc)
+	// printResultsSummary(results)
 }
 
 // waits till beginning of next second
@@ -75,9 +78,9 @@ type Lattice struct {
 
 func NewLattice() *Lattice {
 	cfg := &aws.Config{
-		Region: aws.String("us-west-2"),
-		//		Endpoint:   aws.String(""),
+		Region:     aws.String("us-west-2"),
 		MaxRetries: aws.Int(0),
+		Retryer:    &NoRetry{},
 	}
 	sess := session.New(cfg)
 	client := New(sess)
@@ -118,4 +121,19 @@ func printResultsSummary(res []Result) {
 		}
 	}
 	log.Printf("results summary, total=%d, success=%d, errors=%v", total, success, errors)
+}
+
+type NoRetry struct {
+}
+
+func (r *NoRetry) RetryRules(_ *request.Request) time.Duration {
+	return 0
+}
+
+func (r *NoRetry) ShouldRetry(_ *request.Request) bool {
+	return false
+}
+
+func (r *NoRetry) MaxRetries() int {
+	return 0
 }
