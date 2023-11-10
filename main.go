@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"sync"
 	"time"
 
@@ -16,17 +17,41 @@ import (
 
 func main() {
 	lattice := NewLattice()
+	var create int
+	var read int
 
-	// waitNextSecond()
-	// results := runThrottleTest("list sn", 1000, lattice.listSn)
-	// printResultsSummary(results)
+	var wg sync.WaitGroup
 
-	// waitNextSecond()
-	// results := runThrottleTest("list svcs", 1000, lattice.listSvc)
-	// printResultsSummary(results)
+	log.SetOutput(os.Stdout)
 
-	waitNextSecond()
-	runThrottleTest("create sn", 20, lattice.createSn)
+	fmt.Print("Enter create rate per second: ")
+	fmt.Scan(&create)
+	fmt.Print("Enter read rate per second: ")
+	fmt.Scan(&read)
+	fmt.Println()
+
+	// runThrottleTest("list service networks", 1000, lattice.listSn)
+
+	for i := 0; i < 60; i++ {
+		waitNextSecond()
+		wg.Add(1)
+
+		go func(i int) {
+			defer wg.Done()
+			runThrottleTest("create", create, lattice.createSn)
+		}(i)
+
+		wg.Add(1)
+
+		go func(i int) {
+			defer wg.Done()
+			runThrottleTest("read", read, lattice.listSn)
+		}(i)
+
+		wg.Wait()
+	}
+
+	fmt.Println("Testing done!")
 }
 
 // waits till beginning of next second
@@ -50,7 +75,7 @@ func (r Result) String() string {
 }
 
 func runThrottleTest(name string, concurrency int, f func() error) []Result {
-	log.Printf("starting throttle test, name=%s, n=%d", name, concurrency)
+	// log.Printf("starting throttle test, name=%s, n=%d", name, concurrency)
 	var wg sync.WaitGroup
 	var outLock sync.Mutex
 	var results []Result
@@ -72,7 +97,7 @@ func runThrottleTest(name string, concurrency int, f func() error) []Result {
 		}()
 	}
 	wg.Wait()
-	printResultsSummary(results)
+	printResultsSummary(results, name)
 	return results
 }
 
@@ -82,11 +107,17 @@ type Lattice struct {
 
 func NewLattice() *Lattice {
 	cfg := &aws.Config{
-		Region:     aws.String("us-west-2"),
+		Region:     aws.String("us-east-1"),
 		MaxRetries: aws.Int(0),
 		Retryer:    &NoRetry{},
 	}
-	sess := session.New(cfg)
+	sess, err := session.NewSession(cfg)
+
+	if err != nil {
+		log.Fatal(err)
+		panic(err)
+	}
+
 	client := New(sess)
 	return &Lattice{c: client}
 }
@@ -116,24 +147,31 @@ func printResults(res []Result) {
 	}
 }
 
-func printResultsSummary(res []Result) {
+func printResultsSummary(res []Result, name string) {
 	total := len(res)
 	success := 0
-	errors := map[string]int{}
+	throttled := 0
 	for _, r := range res {
 		if r.err == nil {
 			success += 1
+			// fmt.Printf("start=%s,end=%s\n", r.start.Format(TimeFormat), r.end.Format(TimeFormat))
 		} else {
 			code := "unknown"
 			if aerr, ok := r.err.(awserr.Error); ok {
 				code = aerr.Code()
 			}
-			errCnt := errors[code]
-			errCnt += 1
-			errors[code] = errCnt
+
+			if code == "ThrottlingException" {
+				throttled += 1
+			} else {
+				success += 1
+			}
+
+			// fmt.Printf("start=%s,end=%s,error=%v\n", r.start.Format(TimeFormat), r.end.Format(TimeFormat), code)
 		}
+
 	}
-	log.Printf("results summary, total=%d, success=%d, errors=%v", total, success, errors)
+	log.Printf("| %-20s | total=%03d | success=%03d | throttled=%03d", name, total, success, throttled)
 }
 
 type NoRetry struct {
