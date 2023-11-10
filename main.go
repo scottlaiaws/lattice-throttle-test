@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
-	"os"
 	"sync"
 	"time"
 
@@ -22,8 +20,6 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	log.SetOutput(os.Stdout)
-
 	fmt.Print("Enter create rate per second: ")
 	fmt.Scan(&create)
 	fmt.Print("Enter read rate per second: ")
@@ -34,21 +30,27 @@ func main() {
 
 	for i := 0; i < 60; i++ {
 		waitNextSecond()
-		wg.Add(1)
 
-		go func(i int) {
-			defer wg.Done()
-			runThrottleTest("create", create, lattice.createSn)
-		}(i)
+		if create > 0 {
+			wg.Add(1)
 
-		wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				runThrottleTest("create", create, lattice.createSn)
+			}(i)
+		}
 
-		go func(i int) {
-			defer wg.Done()
-			runThrottleTest("read", read, lattice.listSn)
-		}(i)
+		if read > 0 {
+			wg.Add(1)
+
+			go func(i int) {
+				defer wg.Done()
+				runThrottleTest("read", read, lattice.listSn)
+			}(i)
+		}
 
 		wg.Wait()
+
 	}
 
 	fmt.Println("Testing done!")
@@ -75,7 +77,6 @@ func (r Result) String() string {
 }
 
 func runThrottleTest(name string, concurrency int, f func() error) []Result {
-	// log.Printf("starting throttle test, name=%s, n=%d", name, concurrency)
 	var wg sync.WaitGroup
 	var outLock sync.Mutex
 	var results []Result
@@ -114,7 +115,6 @@ func NewLattice() *Lattice {
 	sess, err := session.NewSession(cfg)
 
 	if err != nil {
-		log.Fatal(err)
 		panic(err)
 	}
 
@@ -166,12 +166,10 @@ func printResultsSummary(res []Result, name string) {
 			} else {
 				success += 1
 			}
-
-			// fmt.Printf("start=%s,end=%s,error=%v\n", r.start.Format(TimeFormat), r.end.Format(TimeFormat), code)
 		}
 
 	}
-	log.Printf("| %-20s | total=%03d | success=%03d | throttled=%03d", name, total, success, throttled)
+	fmt.Printf("| %-10s | total=%03d | throttled=%03d\n", name, total, throttled)
 }
 
 type NoRetry struct {
